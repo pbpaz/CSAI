@@ -74,22 +74,40 @@ Una vez dentro de WordPress, tendremos acceso a varias funcionalidades. Entre el
 
 Si un atacante logra acceder al panel de administración, puede editar archivos clave del tema, como el index.php del theme Twenty Twenty-Two, para insertar código malicioso. A través de esta modificación, es posible ejecutar comandos en el servidor, establecer conexiones remotas o incluso crear una puerta trasera para acceder al sitio de manera persistente.
 
+![Script malicioso](A_Docs/Twentytwenty-two.png)
+
 Establecemos un shell inverso que nos permite atraves de una llamada http conectarnos a la maquína.
+
+![Escalada de priviliegios: www-data ](A_Docs/EscuchaDePuertoUsuarioPorDefecto.png)
 
 Una vez dentro de la máquina, nos encontraremos ejecutando comandos con el usuario www-data, que es el usuario por defecto de servidores web como Apache y Nginx. Este usuario tiene permisos limitados dentro del sistema, lo que restringe nuestras acciones y evita que podamos modificar archivos críticos o ejecutar comandos con privilegios elevados.
 
 El primer paso será explorar los distintos archivos y directorios en busca de información sensible o posibles vulnerabilidades. Para ello, revisaremos los permisos, propietarios y configuraciones de archivos clave que puedan darnos acceso a otros usuarios o procesos con más privilegios. Centraremos nuestra atención en el directorio /home/kvlz, ya que pertenece a otro usuario que probablemente tenga más permisos que www-data.
 
-Al analizar el sistema, encontramos un script llamado cron_script.sh dentro del directorio del usuario kvlz. Observamos que su función principal es leer el contenido de un archivo llamado wp-encrypted.txt, el cual está cifrado en Base64, luego desencriptarlo y volcar el resultado en /tmp/decoded.txt.
+Al analizar el sistema, encontramos un script llamado cron_script.sh dentro del directorio del usuario kvlz. Observamos que su función principal es leer el contenido de un archivo llamado wp-encrypted.txt, el cual está cifrado en Base64, luego desencriptarlo y volcar el resultado en /tmp/decoded.txt. A mayores, utilizando la herramienta pspy comprobamos que la terea se ejecuta una vez por minuto.
+
+![Directorios y archivos de interés: kvlz](A_Docs/DirectoriosKvzlx.png)
 
 Este comportamiento sugiere que el script se ejecuta de manera automática en intervalos de tiempo, posiblemente a través de una tarea programada con cron.
 
 Dado que el archivo wp-encrypted.txt no existe en el sistema, podemos aprovechar la situación para crear nuestro propio archivo. La idea es escribir el código que, al ser descifrado por el script, permita establecer un shell inverso en el puerto 1234. Una vez que se tenga el comando o secuencia de comandos necesaria, se procede a cifrarlo en Base64 para que, al ejecutarse el script y se decodifique. Desde otro terminal esperamos a que el payload se ejecute y tendremos acceso a la máquina con el usuario kvzlx.
 
+![Escalada de priviliegios: www-kvlz](A_Docs/EscuchaDePuertoKvlx.png)
+
 Al investigar los archivos en el sistema, no encontramos binarios con permisos inusuales que pudieran explotarse directamente para la escalada de privilegios. Sin embargo, observamos que en el directorio /opt está instalada una versión de Python, lo que podiamos intuir, ya que en el análisis con la herramienta pspy, notamos que los permisos de ejecución de Python fueron retirados para el usuario www-data.
 
 Centrandonos en pyhon procedemos a utilizar la herramienta getcap para analizar las capabilities. Un mecanismo de control de privilegios en sistemas operativos basados en Unix que permite dividir los privilegios del superusuario (root) en distintas “capacidades” independientes.
 
-Como no podemos instalar la herramienta directamente en la maquina vulnerable lo que haremos es crear un servidor que corra en el puerto 8080 y nos permita descargar atraves de wget los ficheros necesarios patra la ejecución de la herramienta desde la máquina vulnerable.
+Como no podemos instalar la herramienta directamente en la maquina vulnerable lo que haremos es crear un servidor que corra en el puerto 8080 y nos permita descargar atraves de wget los ficheros necesarios para la ejecución de la herramienta desde la máquina vulnerable.
 
 ![Capabilities](A_Docs/getCapSearch.png)
+
+Con la ejecución del comando observamos que phyton puede tiene asignada la capacidad cap_setuid=ep. En Linux, esta capacidad permite otorgar privilegios específicos a binarios o procesos sin que tengan que ser ejecutados directamente como root. Para intentar explotar esta aparente vulnerabilidad intentaremos ejecutar el siguiente comando: 
+
+```bash
+/opt/python3 -c 'import os; os.setuid(0); os.system("/bin/bash")'
+```
+
+Como resultado, conseguimos acceder al usuario root con privilegios elevados.
+
+![Resultado final](A_Docs/EntradaRoot.png)
