@@ -90,4 +90,6 @@ Al investigar los archivos en el sistema, no encontramos binarios con permisos i
 
 Centrandonos en pyhon procedemos a utilizar la herramienta getcap para analizar las capabilities. Un mecanismo de control de privilegios en sistemas operativos basados en Unix que permite dividir los privilegios del superusuario (root) en distintas “capacidades” independientes.
 
-Como no podemos instalar la herramienta directamente en la maquina vulnerable lo que haremos es crear un servidor que corra en el puerto 8080 y ofrezca lso binarios necesarios 
+Como no podemos instalar la herramienta directamente en la maquina vulnerable lo que haremos es crear un servidor que corra en el puerto 8080 y nos permita descargar atraves de wget los ficheros necesarios patra la ejecución de la herramienta desde la máquina vulnerable.
+
+![Capabilities](A_Docs/getCapSearch.png)
